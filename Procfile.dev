@@ -1,0 +1,8 @@
+# Dev orchestration for the three processes. Run with foreman / overmind / hivemind:
+#   overmind start -f Procfile.dev    (or: foreman start -f Procfile.dev)
+#
+# Ports: Rails 3000, gosse 3002, Vite 5173 (Vite proxies /api -> Rails, /sse -> gosse).
+# SSE_PUBLISH_SECRET must match between rails and gosse. Use your own secret outside dev.
+rails: cd backend && { set -a; [ -f .env ] && . ./.env; set +a; } && SSE_PUBLISH_URL=http://localhost:3002/publish SSE_PUBLISH_SECRET=dev-secret bin/rails server -p 3000
+gosse: cd gosse && PORT=3002 SSE_PUBLISH_SECRET=dev-secret go run .
+web:   cd frontend && npm run dev

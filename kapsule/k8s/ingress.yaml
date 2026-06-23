@@ -1,0 +1,44 @@
+# Single public entrypoint (one Scaleway LB provisioned by ingress-nginx).
+# Same-origin path routing means the PWA's relative /api and /sse URLs work with
+# zero CORS, exactly like the Vite dev proxy does locally:
+#   /api -> backend (Rails)   /sse -> gosse (SSE)   / -> frontend (static PWA)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: lilt
+  annotations:
+    # cert-manager emette/rinnova il certificato Let's Encrypt per gli host in tls.
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # SSE must stream, not buffer. gosse already sends X-Accel-Buffering: no, but
+    # we also disable buffering and raise the read timeout ingress-wide so a
+    # long-lived /sse connection isn't cut between heartbeats.
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - APP_HOST_PLACEHOLDER
+      secretName: lilt-tls
+  rules:
+    - host: APP_HOST_PLACEHOLDER
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port: { number: 80 }
+          - path: /sse
+            pathType: Prefix
+            backend:
+              service:
+                name: gosse
+                port: { number: 80 }
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port: { number: 80 }

@@ -1,0 +1,50 @@
+# Dependencies (matches node_modules at any depth — frontend/, future backend/, …)
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+dev-dist/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local / editor / OS
+*.local
+.DS_Store
+.idea/
+.vscode/
+
+# Root environment file (docker-compose). The .env.example template is tracked.
+/.env
+
+# Local-only config (per plan-management skill)
+.claude/nosco_config.local.json
+
+# --- Backend (Rails API, backend/) ---
+# Bundler config
+backend/.bundle/
+# Logs and tempfiles (keep the .keep placeholders)
+backend/log/*
+backend/tmp/*
+!backend/log/.keep
+!backend/tmp/.keep
+backend/tmp/pids/*
+!backend/tmp/pids/.keep
+# SQLite databases and uploaded files (keep the .keep placeholder)
+backend/storage/*
+!backend/storage/.keep
+# Encrypted credentials master key
+backend/config/master.key
+# Environment files
+backend/.env*
+
+# --- gosse (Go SSE service, gosse/) ---
+# Compiled binary (README: `go build -o gosse .`)
+gosse/gosse
+
+# --- kapsule (deploy, kapsule/) ---
+# Segreti di deploy locali, sorgentati da config.sh (PG/REDIS/SSE/VAPID).
+# Il template versionato è kapsule/.env.example (NON ignorato).
+kapsule/.env

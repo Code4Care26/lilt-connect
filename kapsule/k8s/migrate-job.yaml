@@ -1,0 +1,43 @@
+# One-shot schema migration. Runs `bin/rails db:prepare` exactly once before the
+# app rollout, so the backend replicas (SKIP_DB_PREPARE=1) never race on it.
+# On a fresh database db:prepare creates it, migrates and seeds; on an existing
+# one it just applies pending migrations. Uses the SAME image as the backend, so
+# the migrations always match the deployed code. BACKEND_IMAGE is substituted by
+# 05-deploy.sh.
+#
+# Note: `args` (not `command`) is used so the image ENTRYPOINT (docker-entrypoint,
+# which sets up jemalloc) still runs; its own db:prepare is skipped because the
+# last arg is "db:prepare", not "server".
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migrate
+  labels: { app: db-migrate }
+spec:
+  backoffLimit: 3
+  # Reclaim the finished Job object automatically after 5 minutes.
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels: { app: db-migrate }
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: BACKEND_IMAGE
+          args: ["./bin/rails", "db:prepare"]
+          env:
+            - name: RAILS_ENV
+              value: production
+            - name: RAILS_MASTER_KEY
+              valueFrom: { secretKeyRef: { name: lilt-secrets, key: rails-master-key } }
+            - name: DATABASE_HOST
+              valueFrom: { secretKeyRef: { name: lilt-secrets, key: database-host } }
+            - name: DATABASE_PORT
+              valueFrom: { secretKeyRef: { name: lilt-secrets, key: database-port } }
+            - name: DATABASE_USERNAME
+              valueFrom: { secretKeyRef: { name: lilt-secrets, key: database-username } }
+            - name: DATABASE_PASSWORD
+              valueFrom: { secretKeyRef: { name: lilt-secrets, key: database-password } }
+            - name: DATABASE_NAME
+              valueFrom: { secretKeyRef: { name: lilt-secrets, key: database-name } }

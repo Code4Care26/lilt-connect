@@ -1,0 +1,80 @@
+# SSE fan-out (Go) on :3002. Made horizontally scalable by REDIS_URL: every
+# instance PUBLISHes /publish payloads to a shared Redis channel and SUBSCRIBEs
+# to fan them out to its own clients (see gosse/broadcast.go, README §3.2). So
+# unlike the in-memory-only mode, replicas > 1 is correct here. GOSSE_IMAGE is
+# substituted by 05-deploy.sh.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gosse
+  labels: { app: gosse }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: gosse }
+  template:
+    metadata:
+      labels: { app: gosse }
+    spec:
+      containers:
+        - name: gosse
+          image: GOSSE_IMAGE
+          ports:
+            - containerPort: 3002
+          env:
+            # The code defaults to 127.0.0.1 (dev-safe). In the pod it must bind
+            # all interfaces or the Service can't reach it.
+            - name: HOST
+              value: 0.0.0.0
+            - name: PORT
+              value: "3002"
+            - name: SSE_PUBLISH_SECRET
+              valueFrom: { secretKeyRef: { name: lilt-secrets, key: sse-publish-secret } }
+            - name: REDIS_URL
+              valueFrom: { secretKeyRef: { name: lilt-secrets, key: redis-url } }
+            # Il Redis gestito Scaleway usa una CA privata non nel bundle distroless;
+            # sul Private Network il traffico è isolato → salta la verifica del cert
+            # (TLS resta attivo). Vedi gosse/broadcast.go.
+            - name: REDIS_TLS_INSECURE
+              value: "1"
+          resources:
+            requests: { cpu: 50m, memory: 32Mi }
+            limits: { cpu: 200m, memory: 64Mi }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 3002 }
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: 3002 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gosse
+  labels: { app: gosse }
+spec:
+  type: ClusterIP
+  selector: { app: gosse }
+  ports:
+    # Service :80 -> container :3002, so Rails reaches it at http://gosse/publish.
+    - port: 80
+      targetPort: 3002
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: gosse
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: gosse
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 70 }

@@ -1,0 +1,46 @@
+# Local development PostgreSQL.
+#
+#   docker compose up -d db      # start Postgres in the background
+#   docker compose down          # stop it (data is kept in the named volume)
+#   docker compose down -v       # stop and wipe the data
+#
+# Credentials/host match the defaults in backend/config/database.yml, so Rails
+# connects with no extra env vars. The superuser created here can also create
+# the *_test database that `rails db:create` needs.
+#
+# Credentials are read from the environment (see .env.example) and fall back to
+# the "hackathron" dev defaults when unset, so `docker compose up` still works
+# out of the box. Override them by copying .env.example to .env.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hackathron}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hackathron}
+      POSTGRES_DB: ${POSTGRES_DB:-hackathron_development}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hackathron}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis backs gosse's cross-instance SSE fan-out (pub/sub only, no persistence
+  # needed — invalidations are ephemeral). In dev a single gosse publishes and
+  # subscribes to itself; in prod every gosse replica subscribes to the same
+  # channel. See gosse/README.md and kapsule/README.md §3.2.
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

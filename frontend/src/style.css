@@ -1,0 +1,88 @@
+@import 'tailwindcss';
+
+/* Design tokens lifted from the LILT - Staff design canvas.
+   Exposed as Tailwind v4 theme vars so they're usable as utilities
+   (bg-brand, text-ink, …) while staying faithful to the mockup. */
+@theme {
+  --color-brand: #0d9488; /* teal — primary action */
+  --color-brand-dark: #0f766e;
+  --color-brand-tint: #f0fdfa;
+  --color-lilt: #e2231a; /* LILT red wordmark */
+  --color-ink: #0f172a; /* slate-900 — headings */
+  --color-muted: #64748b; /* slate-500 — secondary text */
+  --color-faint: #94a3b8; /* slate-400 — icons */
+  --color-line: #e2e8f0; /* slate-200 — borders */
+  --color-canvas: #f8fafc; /* slate-50 — app background */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: #e7e5df;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Hide scrollbars inside the app shell, matching the design. */
+.scrl {
+  scrollbar-width: none;
+}
+.scrl::-webkit-scrollbar {
+  display: none;
+  width: 0;
+}
+
+/* Animations from the design canvas. */
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 16px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+@keyframes scrimIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes sheetIn {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.anim-toast {
+  animation: toastIn 0.24s cubic-bezier(0.2, 0, 0, 1);
+}
+.anim-scrim {
+  animation: scrimIn 0.2s ease;
+}
+.anim-sheet {
+  animation: sheetIn 0.32s cubic-bezier(0.2, 0, 0, 1);
+}
+@keyframes bannerIn {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.anim-banner {
+  animation: bannerIn 0.28s cubic-bezier(0.2, 0, 0, 1);
+}

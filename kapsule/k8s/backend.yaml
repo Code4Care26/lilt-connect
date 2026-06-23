@@ -1,0 +1,103 @@
+# Rails 8 API (Puma + Thruster on :80). Stateless: all state lives in the managed
+# PostgreSQL, so it scales horizontally. Schema changes are NOT applied here —
+# SKIP_DB_PREPARE=1 defers them to migrate-job.yaml, which runs once before the
+# rollout. BACKEND_IMAGE is substituted by 05-deploy.sh.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels: { app: backend }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: backend }
+  template:
+    metadata:
+      labels: { app: backend }
+    spec:
+      containers:
+        - name: backend
+          image: BACKEND_IMAGE
+          ports:
+            - containerPort: 8080
+          env:
+            - name: RAILS_ENV
+              value: production
+            # Thruster gira come utente non-root: la :80 è privilegiata e fallisce
+            # ("bind: permission denied"). Bind su una porta alta non privilegiata.
+            - name: HTTP_PORT
+              value: "8080"
+            - name: SKIP_DB_PREPARE
+              value: "1"
+            # Rails connection pool per process; keep threads x replicas under
+            # the managed Postgres max_connections (small nodes have few).
+            - name: RAILS_MAX_THREADS
+              value: "5"
+            # Rails -> gosse, server-to-server, over the cluster-internal Service DNS.
+            - name: SSE_PUBLISH_URL
+              value: http://gosse/publish
+            - name: SSE_PUBLISH_SECRET
+              valueFrom: { secretKeyRef: { name: lilt-secrets, key: sse-publish-secret } }
+            - name: RAILS_MASTER_KEY
+              valueFrom: { secretKeyRef: { name: lilt-secrets, key: rails-master-key } }
+            # database.yml reads these discrete vars (config/database.yml).
+            - name: DATABASE_HOST
+              valueFrom: { secretKeyRef: { name: lilt-secrets, key: database-host } }
+            - name: DATABASE_PORT
+              valueFrom: { secretKeyRef: { name: lilt-secrets, key: database-port } }
+            - name: DATABASE_USERNAME
+              valueFrom: { secretKeyRef: { name: lilt-secrets, key: database-username } }
+            - name: DATABASE_PASSWORD
+              valueFrom: { secretKeyRef: { name: lilt-secrets, key: database-password } }
+            - name: DATABASE_NAME
+              valueFrom: { secretKeyRef: { name: lilt-secrets, key: database-name } }
+            # Web Push (VAPID). Senza queste PushNotifier è no-op (nessuna
+            # notifica push parte). Keypair STABILE — vedi kapsule/04-secrets.sh.
+            - name: VAPID_PUBLIC_KEY
+              valueFrom: { secretKeyRef: { name: lilt-secrets, key: vapid-public-key } }
+            - name: VAPID_PRIVATE_KEY
+              valueFrom: { secretKeyRef: { name: lilt-secrets, key: vapid-private-key } }
+            - name: VAPID_SUBJECT
+              valueFrom: { secretKeyRef: { name: lilt-secrets, key: vapid-subject } }
+          resources:
+            # requests are ESSENTIAL: without them the node Cluster Autoscaler
+            # can't tell when a new node is needed.
+            requests: { cpu: 250m, memory: 256Mi }
+            limits: { cpu: "1", memory: 512Mi }
+          readinessProbe:
+            httpGet: { path: /up, port: 8080 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /up, port: 8080 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  labels: { app: backend }
+spec:
+  type: ClusterIP
+  selector: { app: backend }
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 70 }

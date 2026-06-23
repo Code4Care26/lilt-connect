@@ -1,0 +1,4 @@
+# The compiled dev binary (we rebuild inside the image) and docs.
+gosse
+*.md
+.git/
